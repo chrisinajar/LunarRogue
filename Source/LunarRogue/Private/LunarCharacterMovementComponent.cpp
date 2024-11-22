@@ -109,7 +109,7 @@ void ULunarCharacterMovementComponent::PhysSliding(float deltaTime, int32 Iterat
 		const FVector OldLocation = UpdatedComponent->GetComponentLocation();
 		const FFindFloorResult OldFloor = CurrentFloor;
 
-		// RestorePreAdditiveRootMotionVelocity();
+		RestorePreAdditiveRootMotionVelocity();
 
 		// Ensure velocity is horizontal.
 		MaintainHorizontalGroundVelocity();
