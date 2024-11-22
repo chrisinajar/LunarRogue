@@ -5,6 +5,29 @@
 #include "GameFramework/Character.h"
 #include "LunarTypes.h"
 
+void ULunarCharacterMovementComponent::BeginSlide()
+{
+    if (IsMovingOnGround())
+    {
+        SetMovementMode(MOVE_Custom, CMOVE_Slide);
+    }
+}
+
+void ULunarCharacterMovementComponent::EndSlide()
+{
+    if (IsSliding())
+    {
+        if (CustomMovementMode == CMOVE_AirSlide)
+        {
+            SetMovementMode(MOVE_Falling, CMOVE_AirSlide);
+        }
+        else if (CustomMovementMode == CMOVE_Slide)
+        {
+            SetMovementMode(MOVE_Walking, CMOVE_Slide);
+        }
+    }
+}
+
 bool ULunarCharacterMovementComponent::IsSliding() const
 {
     return MovementMode == MOVE_Custom && (CustomMovementMode == CMOVE_AirSlide || CustomMovementMode == CMOVE_Slide);
@@ -120,7 +143,7 @@ void ULunarCharacterMovementComponent::PhysSliding(float deltaTime, int32 Iterat
 		const bool bSkipForLedgeMove = bTriedLedgeMove;
 		// if( !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() && !bSkipForLedgeMove )
 		// {
-        CalcVelocity(timeTick, GroundFriction, false, GetMaxBrakingDeceleration());
+        CalcVelocity(timeTick, GroundFriction/20, true, GetMaxBrakingDeceleration());
 		// }
 
 		ApplyRootMotionToVelocity(timeTick);
@@ -290,4 +313,9 @@ void ULunarCharacterMovementComponent::PhysSliding(float deltaTime, int32 Iterat
 	{
 		MaintainHorizontalGroundVelocity();
 	}
+
+    if (Velocity.Size() < MinimumSpeed)
+    {
+        EndSlide();
+    }
 }

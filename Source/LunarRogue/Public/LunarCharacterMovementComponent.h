@@ -25,6 +25,16 @@ public:
 	virtual bool IsSlidingOnGround() const;
 	UFUNCTION(BlueprintCallable, Category="Character Movement: Lunar Slide")
 	virtual bool IsSlidingInAir() const;
+	UFUNCTION(BlueprintCallable, Category="Character Movement: Lunar Slide")
+	virtual void BeginSlide();
+	UFUNCTION(BlueprintCallable, Category="Character Movement: Lunar Slide")
+	virtual void EndSlide();
+
+	// properties
+	UPROPERTY(Category="Character Movement: Lunar Slide", EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0", UIMin="0"))
+	float GroundFrictionFactor = 20;
+	UPROPERTY(Category="Character Movement: Lunar Slide", EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0", UIMin="0"))
+	float MinimumSpeed = 100;
 
 	// engine overrides
 	virtual void HandleWalkingOffLedge(const FVector& PreviousFloorImpactNormal, const FVector& PreviousFloorContactNormal, const FVector& PreviousLocation, float TimeDelta);
