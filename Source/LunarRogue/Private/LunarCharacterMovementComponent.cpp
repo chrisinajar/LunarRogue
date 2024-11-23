@@ -134,18 +134,41 @@ void ULunarCharacterMovementComponent::PhysSliding(float deltaTime, int32 Iterat
 
 		RestorePreAdditiveRootMotionVelocity();
 
+        // apply gravity before vectorizing velocity so we speedup downhill / slow down uphill
+        // Velocity = NewFallVelocity(Velocity, -GetGravityDirection() * GetGravityZ(), timeTick);
+
 		// Ensure velocity is horizontal.
 		MaintainHorizontalGroundVelocity();
 		const FVector OldVelocity = Velocity;
-		Acceleration = FVector::VectorPlaneProject(Acceleration, -DefaultGravityDirection);
+		// Acceleration = FVector::VectorPlaneProject(Acceleration, -DefaultGravityDirection);
+		Acceleration = ProjectToGravityFloor(Acceleration);
 
 		// Apply acceleration
 		const bool bSkipForLedgeMove = bTriedLedgeMove;
-		// if( !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() && !bSkipForLedgeMove )
-		// {
-        CalcVelocity(timeTick, GroundFriction/20, true, GetMaxBrakingDeceleration());
-		// }
+		if( !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() && !bSkipForLedgeMove )
+		{
+            CalcVelocity(timeTick, GroundFriction/20, true, 0);
+		}
 
+        const auto FloorNormal = CurrentFloor.HitResult.ImpactNormal;
+        const auto FloorNormalZ = GetGravitySpaceZ(FloorNormal);
+        // FloorNormalZ is the z factor of floor normal, so it's 1.0 for a flat floor and 0.0 for a flat wall
+        // it could also be negative for ceilings etc
+        if (FloorNormalZ < (1.f - UE_KINDA_SMALL_NUMBER) && FloorNormalZ > UE_KINDA_SMALL_NUMBER)
+        {
+            // the NSEW normal pointing "towards" downhill
+            const auto DownhillDirectionNormal = ProjectToGravityFloor(FloorNormal).GetSafeNormal();
+            // pointing parallel with the surface perfectly downhill
+		    const auto DownhillVector = FVector::VectorPlaneProject(DownhillDirectionNormal + GetGravityDirection(), FloorNormal);
+            // let gravity tick once against velocity
+            const auto FallVelocity = NewFallVelocity(Velocity, GetGravityDirection() * GetGravityZ(), timeTick);
+            // grab how much speed we gained, this is how much we need to relay into horizontal movement
+            const auto FallSpeedToGain = FallVelocity.Z - Velocity.Z;
+
+            Velocity = Velocity + (DownhillDirectionNormal * (FallSpeedToGain * FMath::Min(1.f - (FloorNormalZ * FloorNormalZ), 1.f)));
+        }
+
+		Velocity = Velocity * (1.f - FMath::Min(GroundFriction/GroundFrictionFactor * timeTick, 1.f));
 		ApplyRootMotionToVelocity(timeTick);
 
 		if (MovementMode != StartingMovementMode || CustomMovementMode != StartingCustomMovementMode)
