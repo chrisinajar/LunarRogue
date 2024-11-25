@@ -5,6 +5,15 @@
 #include "GameFramework/Character.h"
 #include "LunarTypes.h"
 
+bool ULunarCharacterMovementComponent::IsWalkable(const FHitResult& Hit) const
+{
+    if (!IsSliding())
+	{
+		return UCharacterMovementComponent::IsWalkable(Hit);
+	}
+	return true;
+}
+
 void ULunarCharacterMovementComponent::BeginSlide()
 {
     if (IsMovingOnGround())
@@ -311,28 +320,15 @@ void ULunarCharacterMovementComponent::PhysSliding(float deltaTime, int32 Iterat
 			}
 		}
 
-
-		// Allow overlap events and such to change physics state and velocity
-		if (IsMovingOnGround())
-		{
-			// Make velocity reflect actual move
-			if( !bJustTeleported && !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() && timeTick >= MIN_TICK_TIME)
-			{
-				// TODO-RootMotionSource: Allow this to happen during partial override Velocity, but only set allowed axes?
-				Velocity = (UpdatedComponent->GetComponentLocation() - OldLocation) / timeTick;
-				MaintainHorizontalGroundVelocity();
-			}
-		}
-
 		// If we didn't move at all this iteration then abort (since future iterations will also be stuck).
 		if (UpdatedComponent->GetComponentLocation() == OldLocation)
 		{
 			remainingTime = 0.f;
 			break;
-		}	
+		}
 	}
 
-	if (IsMovingOnGround())
+	if (IsSlidingOnGround())
 	{
 		MaintainHorizontalGroundVelocity();
 	}

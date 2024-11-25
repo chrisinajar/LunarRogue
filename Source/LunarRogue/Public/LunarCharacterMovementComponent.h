@@ -40,4 +40,5 @@ public:
 	virtual void HandleWalkingOffLedge(const FVector& PreviousFloorImpactNormal, const FVector& PreviousFloorContactNormal, const FVector& PreviousLocation, float TimeDelta);
 	virtual void ProcessLanded(const FHitResult& Hit, float remainingTime, int32 Iterations);
 	virtual FVector ConstrainInputAcceleration(const FVector& InputAcceleration) const;
+	virtual bool IsWalkable(const FHitResult& Hit) const;
 };
