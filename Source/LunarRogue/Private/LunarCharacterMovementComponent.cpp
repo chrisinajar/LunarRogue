@@ -147,8 +147,9 @@ void ULunarCharacterMovementComponent::PhysSliding(float deltaTime, int32 Iterat
 		const bool bSkipForLedgeMove = bTriedLedgeMove;
 		if( !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() && !bSkipForLedgeMove )
 		{
-            CalcVelocity(timeTick, GroundFriction/20, true, 0);
+            CalcVelocity(timeTick, GroundFriction/GroundFrictionFactor, false, 0);
 		}
+		Velocity = Velocity * (1.f - FMath::Min(GroundFriction/GroundFrictionFactor * timeTick, 1.f));
 
         const auto FloorNormal = CurrentFloor.HitResult.ImpactNormal;
         const auto FloorNormalZ = GetGravitySpaceZ(FloorNormal);
@@ -159,7 +160,7 @@ void ULunarCharacterMovementComponent::PhysSliding(float deltaTime, int32 Iterat
             // the NSEW normal pointing "towards" downhill
             const auto DownhillDirectionNormal = ProjectToGravityFloor(FloorNormal).GetSafeNormal();
             // pointing parallel with the surface perfectly downhill
-		    const auto DownhillVector = FVector::VectorPlaneProject(DownhillDirectionNormal + GetGravityDirection(), FloorNormal);
+		    // const auto DownhillVector = FVector::VectorPlaneProject(DownhillDirectionNormal + GetGravityDirection(), FloorNormal);
             // let gravity tick once against velocity
             const auto FallVelocity = NewFallVelocity(Velocity, GetGravityDirection() * GetGravityZ(), timeTick);
             // grab how much speed we gained, this is how much we need to relay into horizontal movement
@@ -168,7 +169,6 @@ void ULunarCharacterMovementComponent::PhysSliding(float deltaTime, int32 Iterat
             Velocity = Velocity + (DownhillDirectionNormal * (FallSpeedToGain * FMath::Min(1.f - (FloorNormalZ * FloorNormalZ), 1.f)));
         }
 
-		Velocity = Velocity * (1.f - FMath::Min(GroundFriction/GroundFrictionFactor * timeTick, 1.f));
 		ApplyRootMotionToVelocity(timeTick);
 
 		if (MovementMode != StartingMovementMode || CustomMovementMode != StartingCustomMovementMode)
