@@ -41,4 +41,5 @@ public:
 	virtual void ProcessLanded(const FHitResult& Hit, float remainingTime, int32 Iterations);
 	virtual FVector ConstrainInputAcceleration(const FVector& InputAcceleration) const;
 	virtual bool IsWalkable(const FHitResult& Hit) const;
+	virtual float SlideAlongSurface(const FVector& Delta, float Time, const FVector& Normal, FHitResult& Hit, bool bHandleImpact) override;
 };

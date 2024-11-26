@@ -70,6 +70,45 @@ void ULunarCharacterMovementComponent::ProcessLanded(const FHitResult& Hit, floa
     }
 }
 
+float ULunarCharacterMovementComponent::SlideAlongSurface(const FVector& Delta, float Time, const FVector& InNormal, FHitResult& Hit, bool bHandleImpact)
+{
+	if (!Hit.bBlockingHit)
+	{
+		return 0.f;
+	}
+
+	FVector Normal(InNormal);
+	const FVector::FReal NormalZ = GetGravitySpaceZ(Normal);
+	if (IsSlidingOnGround())
+	{
+		// We don't want to be pushed up an unwalkable surface.
+		if (NormalZ > 0.f)
+		{
+			if (!IsWalkable(Hit))
+			{
+				Normal = ProjectToGravityFloor(Normal).GetSafeNormal();
+			}
+		}
+		else if (NormalZ < -UE_KINDA_SMALL_NUMBER)
+		{
+			// Don't push down into the floor when the impact is on the upper portion of the capsule.
+			if (CurrentFloor.FloorDist < MIN_FLOOR_DIST && CurrentFloor.bBlockingHit)
+			{
+				const FVector FloorNormal = CurrentFloor.HitResult.Normal;
+				const bool bFloorOpposedToMovement = (Delta | FloorNormal) < 0.f && (GetGravitySpaceZ(FloorNormal) < 1.f - UE_DELTA);
+				if (bFloorOpposedToMovement)
+				{
+					Normal = FloorNormal;
+				}
+				
+				Normal = ProjectToGravityFloor(Normal).GetSafeNormal();
+			}
+		}
+	}
+
+	return Super::SlideAlongSurface(Delta, Time, Normal, Hit, bHandleImpact);
+}
+
 void ULunarCharacterMovementComponent::PhysCustom(float deltaTime, int32 Iterations)
 {
     switch (CustomMovementMode)
@@ -143,13 +182,9 @@ void ULunarCharacterMovementComponent::PhysSliding(float deltaTime, int32 Iterat
 
 		RestorePreAdditiveRootMotionVelocity();
 
-        // apply gravity before vectorizing velocity so we speedup downhill / slow down uphill
-        // Velocity = NewFallVelocity(Velocity, -GetGravityDirection() * GetGravityZ(), timeTick);
-
 		// Ensure velocity is horizontal.
 		MaintainHorizontalGroundVelocity();
 		const FVector OldVelocity = Velocity;
-		// Acceleration = FVector::VectorPlaneProject(Acceleration, -DefaultGravityDirection);
 		Acceleration = ProjectToGravityFloor(Acceleration);
 
 		// Apply acceleration
@@ -279,7 +314,7 @@ void ULunarCharacterMovementComponent::PhysSliding(float deltaTime, int32 Iterat
 				if (ShouldCatchAir(OldFloor, CurrentFloor))
 				{
 					HandleWalkingOffLedge(OldFloor.HitResult.ImpactNormal, OldFloor.HitResult.Normal, OldLocation, timeTick);
-					if (IsMovingOnGround())
+					if (IsSlidingOnGround())
 					{
 						// If still walking, then fall. If not, assume the user set a different mode they want to keep.
 						StartFalling(Iterations, remainingTime, timeTick, Delta, OldLocation);
@@ -320,6 +355,30 @@ void ULunarCharacterMovementComponent::PhysSliding(float deltaTime, int32 Iterat
 			}
 		}
 
+		// Allow overlap events and such to change physics state and velocity
+		if (IsSlidingOnGround())
+		{
+			// Make velocity reflect actual move
+			if(!bMovementModeDirty && !bJustTeleported && !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() && timeTick >= MIN_TICK_TIME)
+			{
+				// why does this negate speed to zero? WHY
+				// TODO-RootMotionSource: Allow this to happen during partial override Velocity, but only set allowed axes?
+				const auto DistanceTraveled = (UpdatedComponent->GetComponentLocation() - OldLocation) / timeTick;
+
+				Velocity = DistanceTraveled;
+				// Velocity = Velocity.GetSafeNormal() * DistanceTraveled.Size();
+			}
+
+			if (Velocity.Size() < MinimumSpeed)
+			{
+				EndSlide();
+			}
+			else
+			{
+				MaintainHorizontalGroundVelocity();
+			}
+		}
+
 		// If we didn't move at all this iteration then abort (since future iterations will also be stuck).
 		if (UpdatedComponent->GetComponentLocation() == OldLocation)
 		{
@@ -332,9 +391,4 @@ void ULunarCharacterMovementComponent::PhysSliding(float deltaTime, int32 Iterat
 	{
 		MaintainHorizontalGroundVelocity();
 	}
-
-    if (Velocity.Size() < MinimumSpeed)
-    {
-        EndSlide();
-    }
 }
