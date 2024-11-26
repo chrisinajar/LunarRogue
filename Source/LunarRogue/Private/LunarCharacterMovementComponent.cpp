@@ -67,6 +67,9 @@ void ULunarCharacterMovementComponent::ProcessLanded(const FHitResult& Hit, floa
     if (IsSlidingInAir())
     {
         CustomMovementMode = CMOVE_Slide;
+		
+		const FVector PreImpactAccel = Acceleration + (-GetGravityDirection() * GetGravityZ());
+		ApplyImpactPhysicsForces(Hit, PreImpactAccel, Velocity);
     }
 }
 
@@ -359,9 +362,8 @@ void ULunarCharacterMovementComponent::PhysSliding(float deltaTime, int32 Iterat
 		if (IsSlidingOnGround())
 		{
 			// Make velocity reflect actual move
-			if(!bMovementModeDirty && !bJustTeleported && !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() && timeTick >= MIN_TICK_TIME)
+			if(bMovementInProgress && !bJustTeleported && !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() && timeTick >= MIN_TICK_TIME && OldFloor.IsWalkableFloor())
 			{
-				// why does this negate speed to zero? WHY
 				// TODO-RootMotionSource: Allow this to happen during partial override Velocity, but only set allowed axes?
 				const auto DistanceTraveled = (UpdatedComponent->GetComponentLocation() - OldLocation) / timeTick;
 
@@ -377,6 +379,7 @@ void ULunarCharacterMovementComponent::PhysSliding(float deltaTime, int32 Iterat
 			{
 				MaintainHorizontalGroundVelocity();
 			}
+			
 		}
 
 		// If we didn't move at all this iteration then abort (since future iterations will also be stuck).
