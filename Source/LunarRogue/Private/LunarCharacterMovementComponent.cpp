@@ -58,6 +58,11 @@ void ULunarCharacterMovementComponent::HandleWalkingOffLedge(const FVector& Prev
     if (IsSlidingOnGround())
     {
         CustomMovementMode = CMOVE_AirSlide;
+		const auto CurrentLocation = UpdatedComponent->GetComponentLocation();
+		// const auto CurrentVelocity = (CurrentLocation - PreviousLocation) / TimeDelta;
+		// const auto LaunchDirection = FVector::VectorPlaneProject(CurrentVelocity, PreviousFloorImpactNormal);
+
+		Velocity = (CurrentLocation - PreviousLocation) / TimeDelta;
     }
 }
 
