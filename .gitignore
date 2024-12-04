@@ -1,9 +1,12 @@
 Binaries
+Blender
 DerivedDataCache
 Intermediate
 Saved
 .vscode
 .vs
+*.blend
+*.blend1
 *.VC.db
 *.opensdf
 *.opendb
