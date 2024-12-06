@@ -35,6 +35,8 @@ public:
 	float GroundFrictionFactor = 20;
 	UPROPERTY(Category="Character Movement: Lunar Slide", EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0", UIMin="0"))
 	float MinimumSpeed = 100;
+	UPROPERTY(Category="Character Movement (General Settings)", EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0", UIMin="0"))
+	float OverMaxSpeedFrictionFactor = 1;
 
 	// engine overrides
 	virtual void HandleWalkingOffLedge(const FVector& PreviousFloorImpactNormal, const FVector& PreviousFloorContactNormal, const FVector& PreviousLocation, float TimeDelta);
@@ -42,4 +44,5 @@ public:
 	virtual FVector ConstrainInputAcceleration(const FVector& InputAcceleration) const;
 	virtual bool IsWalkable(const FHitResult& Hit) const;
 	virtual float SlideAlongSurface(const FVector& Delta, float Time, const FVector& Normal, FHitResult& Hit, bool bHandleImpact) override;
+	virtual void CalcVelocity(float DeltaTime, float Friction, bool bFluid, float BrakingDeceleration);
 };
