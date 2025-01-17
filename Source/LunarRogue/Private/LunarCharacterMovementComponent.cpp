@@ -58,12 +58,38 @@ void ULunarCharacterMovementComponent::HandleWalkingOffLedge(const FVector& Prev
     UCharacterMovementComponent::HandleWalkingOffLedge(PreviousFloorImpactNormal, PreviousFloorContactNormal, PreviousLocation, TimeDelta);
     if (IsSlidingOnGround())
     {
-		CustomMovementMode = CMOVE_AirSlide;
-		const auto CurrentLocation = UpdatedComponent->GetComponentLocation();
-		// const auto CurrentVelocity = (CurrentLocation - PreviousLocation) / TimeDelta;
-		// const auto LaunchDirection = FVector::VectorPlaneProject(CurrentVelocity, PreviousFloorImpactNormal);
-
-		Velocity = (CurrentLocation - PreviousLocation) / TimeDelta;
+        CustomMovementMode = CMOVE_AirSlide;
+        const auto CurrentLocation = UpdatedComponent->GetComponentLocation();
+        
+        // Calculate velocity based on movement between frames
+        FVector NewVelocity = (CurrentLocation - PreviousLocation) / TimeDelta;
+        
+        // If we're moving fast enough and the floor has an upward angle, preserve the launch trajectory
+        const float CurrentSpeed = NewVelocity.Size();
+        if (CurrentSpeed > 0.0f && !PreviousFloorImpactNormal.IsZero())
+        {
+            // Ensure we have a normalized vector for our calculations
+            const FVector SafeFloorNormal = PreviousFloorImpactNormal.GetSafeNormal();
+            
+            // Get the angle between gravity direction and floor normal
+            const float FloorDotGravity = FVector::DotProduct(SafeFloorNormal, GetGravityDirection());
+            const float LaunchAngleMultiplier = FMath::Abs(FloorDotGravity);
+            
+            // Project velocity along the floor normal to get launch direction
+            // Only do this if we're on a slope (not flat ground)
+            if (LaunchAngleMultiplier < 0.99f)  // Allow small threshold from flat ground
+            {
+                // Project velocity onto the plane defined by the floor normal
+                FVector LaunchDirection = FVector::VectorPlaneProject(NewVelocity, SafeFloorNormal);
+                LaunchDirection = LaunchDirection.GetSafeNormal();
+                
+                // Add upward component based on floor angle and speed
+                const FVector UpwardComponent = SafeFloorNormal * CurrentSpeed * (1.0f - LaunchAngleMultiplier);
+                NewVelocity += UpwardComponent;
+            }
+        }
+        
+        Velocity = NewVelocity;
     }
 }
 
@@ -73,9 +99,17 @@ void ULunarCharacterMovementComponent::ProcessLanded(const FHitResult& Hit, floa
     if (IsSlidingInAir())
     {
         CustomMovementMode = CMOVE_Slide;
-		
-		const FVector PreImpactAccel = Acceleration + (-GetGravityDirection() * GetGravityZ());
-		ApplyImpactPhysicsForces(Hit, PreImpactAccel, Velocity);
+        
+        // Apply heavily dampened impact forces
+        const FVector PreImpactAccel = Acceleration + (-GetGravityDirection() * GetGravityZ() * 0.2f);
+        const FVector DampenedVelocity = Velocity * 0.2f;
+        ApplyImpactPhysicsForces(Hit, PreImpactAccel, DampenedVelocity);
+        
+        // Project remaining velocity onto surface
+        if (!Hit.Normal.IsZero())
+        {
+            Velocity = FVector::VectorPlaneProject(Velocity, Hit.Normal);
+        }
     }
 }
 
@@ -305,13 +339,12 @@ void ULunarCharacterMovementComponent::PhysSliding(float deltaTime, int32 Iterat
 		const FVector PreviousBaseLocation = (OldBase != NULL) ? OldBase->GetComponentLocation() : FVector::ZeroVector;
 		const FVector OldLocation = UpdatedComponent->GetComponentLocation();
 		const FFindFloorResult OldFloor = CurrentFloor;
+		const FVector OldVelocity = Velocity;
 
 		RestorePreAdditiveRootMotionVelocity();
 
 		// Ensure velocity is horizontal.
 		MaintainHorizontalGroundVelocity();
-		const FVector OldVelocity = Velocity;
-		Acceleration = ProjectToGravityFloor(Acceleration);
 
 		// Apply acceleration
 		const bool bSkipForLedgeMove = bTriedLedgeMove;
@@ -490,8 +523,46 @@ void ULunarCharacterMovementComponent::PhysSliding(float deltaTime, int32 Iterat
 				// TODO-RootMotionSource: Allow this to happen during partial override Velocity, but only set allowed axes?
 				const auto DistanceTraveled = (UpdatedComponent->GetComponentLocation() - OldLocation) / timeTick;
 
+				// Skip launch check if we just stepped up
+				if (!StepDownResult.bComputedFloor)  // Only check for launch if we didn't just step up
+				{
+					// Check if our trajectory would take us off the surface
+					const float CurrentSpeed = DistanceTraveled.Size();
+					if (CurrentSpeed > 500.0f && CurrentFloor.bBlockingHit)
+					{
+						// Calculate the angle between our travel direction and the surface
+						const FVector TravelDir = DistanceTraveled.GetSafeNormal();
+						const float DotWithSurface = FVector::DotProduct(TravelDir, CurrentFloor.HitResult.Normal);
+						
+						// Calculate how much gravity would help keep us on the surface over this time step
+						const FVector GravityVector = GetGravityDirection() * GetGravityZ();
+						const float GravityStrength = GravityVector.Size();
+						const float GravityDotSurface = FVector::DotProduct(GravityVector.GetSafeNormal(), CurrentFloor.HitResult.Normal);
+						const float SurfaceAlignedGravity = GravityStrength * FMath::Abs(GravityDotSurface);
+						
+						// Compare velocity perpendicular to surface vs gravity's ability to keep us on it
+						const float VelocityAwayFromSurface = CurrentSpeed * DotWithSurface;
+						const float StickinessFactor = FMath::Lerp(2.0f, 1.2f, FMath::GetMappedRangeValueClamped(
+							FVector2D(500.0f, 1000.0f),  // Speed range
+							FVector2D(0.0f, 1.0f),       // Output range
+							CurrentSpeed
+						));
+						
+						if (VelocityAwayFromSurface > SurfaceAlignedGravity * timeTick * StickinessFactor)
+						{
+							// Only launch if we're actually moving away from surface (positive dot product)
+							if (DotWithSurface > 0.0f)
+							{
+								// Apply gravity for this tick before launching
+								Velocity = DistanceTraveled + (GravityVector * timeTick);
+								HandleWalkingOffLedge(CurrentFloor.HitResult.Normal, CurrentFloor.HitResult.Normal, OldLocation, timeTick);
+								return;
+							}
+						}
+					}
+				}
+
 				Velocity = DistanceTraveled;
-				// Velocity = Velocity.GetSafeNormal() * DistanceTraveled.Size();
 			}
 
 			if (Velocity.Size() < MinimumSpeed)
@@ -502,7 +573,6 @@ void ULunarCharacterMovementComponent::PhysSliding(float deltaTime, int32 Iterat
 			{
 				MaintainHorizontalGroundVelocity();
 			}
-			
 		}
 
 		// If we didn't move at all this iteration then abort (since future iterations will also be stuck).

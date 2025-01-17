@@ -1,0 +1,9 @@
+This is an Unreal Engine 5 project. The C++ code mostly handles physics and core gameplay mechanics. The majority of the game is implemented in Blueprints.
+
+You should pay special attention to the Vector math used through the code, especially some of the counter intuitive aspects such as surface normals pointing away from the surface causing unintuitive situations. It's important to break down problems like that step by step and remember what we know.
+
+"If you describe a problem in sufficient detail, the solution becomes apparent." We should always use this as a guide when solving problems.
+
+Less is better but only when it works. If we can solve a problem by removing something then that's likely the best solution. Poorly defined problems have complex solutions, so when we simplify something it's a sign of going in the right direction.
+
+The full Unreal Engine 5 source code is also part of this project, it is very often needed to understand how things work since so much is handled by parent classes and helper functions. Not all functions always do exactly what you might think they do, so always read their source rather than trust their naming.
